@@ -4,3 +4,8 @@ version = "0.1.0"
 authors = ["talentedev <cryptoveteran24@gmail.com>"]
 
 [dependencies]
+time = "0.1"
+sha1 = "0.6.0"
+bincode = "1.0.0"
+serde = "*"
+serde_derive = "*"
