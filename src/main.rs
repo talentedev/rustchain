@@ -2,37 +2,93 @@ extern crate time;
 extern crate sha1;
 extern crate bincode;
 
-#[macro_use] extern crate serde;
+extern crate serde;
 #[macro_use] extern crate serde_derive;
 
+use std::io::stdin;
+
+const HASH_BYTES_SIZE: usize = 20;
+
 #[derive(Serialize)]
-struct Block {
+struct Blockchain {
     timestamp: i64,
     data: i32,
-    previous: Option<[u8; 20]>,
+    previous: [u8; HASH_BYTES_SIZE],
+}
+
+impl Blockchain {
+
+    /// Adds a block into the blockchain. Encrypt the current block, stores it as the previous block, update the timestamp and the data.
+    ///
+    /// Args:
+    ///
+    /// `data` - data to insert into the new block.
+    fn add_block(
+        &mut self,
+        data: i32,
+    ) {
+
+        let bytes = bincode::serialize(&self).unwrap();
+        let digest = sha1::Sha1::from(bytes).digest().bytes();
+
+        self.timestamp = get_current_timestamp();
+        self.data = data;
+        self.previous = digest;
+    }
+}
+
+/// Refactor the current timestamp generation.
+///
+/// Returns:
+///
+/// the current timestamp
+fn get_current_timestamp() -> i64 {
+    time::now_utc().to_timespec().sec
+}
+
+/// Handles user input and returns that input as a string.
+///
+/// Returns:
+///
+/// user input as string
+fn get_input() -> String {
+
+    let mut input = String::new();
+    stdin().read_line(&mut input).expect("cannot read input");
+
+    input
 }
 
 fn main() {
 
-    /* generate the genesis block */
-
-    let chain = Block {
-        timestamp: time::now_utc().to_timespec().sec,
+    let mut chain = Blockchain {
+        timestamp: get_current_timestamp(),
         data: 0,
-        previous: None,
+        previous: [0; HASH_BYTES_SIZE],
     };
 
     println!("Genesis block has been generated.");
 
-    /* add one block to the ledger: serialize the previous object into raw bytes,
-       in order to generate a new hash digest from those bytes,
-       and use that digest as a previous field content for the new block */
+    loop {
 
-    let previous_block_bytes = bincode::serialize(&chain).unwrap();
+        println!("\nChoices:");
+        println!("1. Add a block");
+        println!("2. Update blockchain");
 
-    let chain = Block {
-        timestamp: time::now_utc().to_timespec().sec,
-        data: 10,
-        previous: Some(sha1::Sha1::from(previous_block_bytes).digest().bytes()),
-    };
+        let input = get_input();
+        let choice = input.as_bytes()[0];
+
+        const ADD_BLOCK_CHOICE: u8 = 0x31;
+
+        if choice == ADD_BLOCK_CHOICE {
+
+            println!("Data of the block:");
+
+            let input = get_input();
+            let data: i32 = input.trim().parse().unwrap();
+            chain.add_block(data);
+
+            println!("One block has been added to the ledger.");
+        }
+    }
 }
