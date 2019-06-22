@@ -1,7 +1,7 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby ts=2 sw=2 expandtab :
 
-PROJECT = "rustchain"
+PROJECT = "rust_blockchain"
 
 ENV['VAGRANT_NO_PARALLEL'] = 'yes'
 ENV['VAGRANT_DEFAULT_PROVIDER'] = 'docker'

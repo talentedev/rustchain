@@ -1,7 +1,7 @@
 [package]
-name = "rustchain"
+name = "rust-blockchain"
 version = "0.1.0"
-authors = ["talentedev <cryptoveteran24@gmail.com>"]
+authors = ["Jean LELIEVRE <Jean.LELIEVRE@supinfo.com>"]
 
 [dependencies]
 time = "0.1"
