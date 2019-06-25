@@ -5,7 +5,14 @@ extern crate bincode;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
 
-use std::io::stdin;
+use std::io::{
+    stdin,
+    Write,
+};
+use std::net::{
+    TcpListener,
+    TcpStream,
+};
 
 #[derive(Serialize)]
 struct HashContent {
@@ -13,6 +20,7 @@ struct HashContent {
     data: i32,
 }
 
+#[derive(Serialize)]
 struct Block {
     content: HashContent,
     previous: String,
@@ -85,12 +93,15 @@ fn main() {
 
         println!("\nChoices:");
         println!("1. Add a block");
-        println!("2. Update blockchain");
+        println!("2. Send blockchain");
+        println!("3. Receive blockchain");
 
         let input = get_input();
         let choice = input.as_bytes()[0];
 
         const ADD_BLOCK_CHOICE: u8 = 0x31;
+        const SEND_BLOCKCHAIN_CHOICE: u8 = 0x32;
+        const RECEIVE_BLOCKCHAIN_CHOICE: u8 = 0x33;
 
         if choice == ADD_BLOCK_CHOICE {
 
@@ -110,6 +121,38 @@ fn main() {
             println!("Current block digest: {}", current_digest);
 
             chain.push(block);
+        }
+        else if choice == SEND_BLOCKCHAIN_CHOICE {
+
+            println!("Send blockchain to local instance at port:");
+
+            let input = get_input();
+            let port = input.trim();
+
+            let bind_address = format!("127.0.0.1:{}", port);
+            let mut stream = TcpStream::connect(bind_address).unwrap();
+
+            let bytes = bincode::serialize(&chain).unwrap();
+            stream.write(&bytes);
+        }
+        else if choice == RECEIVE_BLOCKCHAIN_CHOICE {
+
+            println!("Receive blockchain on port:");
+
+            let input = get_input();
+            let port = input.trim();
+
+            let bind_address = format!("127.0.0.1:{}", port);
+            let listener = TcpListener::bind(bind_address).unwrap();
+
+            println!("Waiting for connections...");
+
+            for input in listener.incoming() {
+
+                println!("Connection received.");
+
+                /* TODO: should receive the blockchain */
+            }
         }
     }
 }
