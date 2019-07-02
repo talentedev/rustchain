@@ -8,19 +8,24 @@ extern crate serde;
 use std::io::{
     stdin,
     Write,
+    Read,
 };
 use std::net::{
     TcpListener,
     TcpStream,
 };
+use bincode::{
+    serialize,
+    deserialize,
+};
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct HashContent {
     timestamp: i64,
     data: i32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct Block {
     content: HashContent,
     previous: String,
@@ -82,6 +87,25 @@ fn get_input() -> String {
     input
 }
 
+/// Returns an address:port string from the user input. Refactored as used multiple times.
+///
+/// Returns:
+///
+/// bind address in "address:port" format
+fn get_bind_address_from_input() -> String {
+
+    let input = get_input();
+    let port = input.trim();
+
+    const LOCALHOST: &str = "127.0.0.1";
+
+    format!(
+        "{}:{}",
+        LOCALHOST,
+        port,
+    ).to_string()
+}
+
 fn main() {
 
     let genesis = Block::new(0, String::new());
@@ -102,8 +126,6 @@ fn main() {
         const ADD_BLOCK_CHOICE: u8 = 0x31;
         const SEND_BLOCKCHAIN_CHOICE: u8 = 0x32;
         const RECEIVE_BLOCKCHAIN_CHOICE: u8 = 0x33;
-
-        const LOCALHOST: &str = "127.0.0.1";
 
         if choice == ADD_BLOCK_CHOICE {
 
@@ -128,38 +150,33 @@ fn main() {
 
             println!("Send blockchain to local instance at port:");
 
-            let input = get_input();
-            let port = input.trim();
-
-            let bind_address = format!(
-                "{}:{}",
-                LOCALHOST,
-                port,
-            );
+            let bind_address = get_bind_address_from_input();
             let mut stream = TcpStream::connect(bind_address).unwrap();
 
-            let bytes = bincode::serialize(&chain).unwrap();
+            let bytes = serialize(&chain).unwrap();
             stream.write(&bytes);
         }
         else if choice == RECEIVE_BLOCKCHAIN_CHOICE {
 
             println!("Receive blockchain on port:");
 
-            let input = get_input();
-            let port = input.trim();
-
-            let bind_address = format!(
-                "{}:{}",
-                LOCALHOST,
-                port,
-            );
+            let bind_address = get_bind_address_from_input();
             let listener = TcpListener::bind(bind_address).unwrap();
 
             println!("Waiting for connection...");
 
-            let connection = listener.accept().unwrap();
+            let mut connection = listener.accept().unwrap();
 
             println!("Connection received.");
+
+            let mut buffer: Vec<u8> = Vec::new();
+            let mut stream = connection.0;
+
+            stream.read_to_end(&mut buffer);
+
+            let blockchain: Vec<Block> = deserialize(&buffer).unwrap();
+
+            /* TODO: compare chains in order to replace it or not... */
         }
     }
 }
