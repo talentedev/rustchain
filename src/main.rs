@@ -25,102 +25,10 @@ use termion::{
 };
 use termion::cursor::Goto;
 
-#[derive(Serialize, Deserialize)]
-struct HashContent {
-    timestamp: i64,
-    data: i32,
-}
+mod hash_content;
+mod block;
 
-#[derive(Serialize, Deserialize)]
-struct Block {
-    content: HashContent,
-    previous: String,
-    current: String,
-}
-
-impl HashContent {
-
-    /// Creates a brand new hash content.
-    ///
-    /// Args:
-    ///
-    /// `data` - the data to store into the block hash content
-    ///
-    /// Returns:
-    ///
-    /// hash content with current timestamp and given data
-    fn new(data: i32) -> HashContent {
-        HashContent {
-            timestamp: time::now_utc().to_timespec().sec,
-            data: data,
-        }
-    }
-
-    /// Getter of the timestamp.
-    ///
-    /// Returns:
-    ///
-    /// block creation timestamp
-    fn get_timestamp(&self) -> i64 {
-        self.timestamp
-    }
-
-    /// Getter of the data.
-    ///
-    /// Returns:
-    ///
-    /// block data
-    fn get_data(&self) -> i32 {
-        self.data
-    }
-}
-
-impl Block {
-
-    /// One block constructor. Creates the block from the given data and previous digest. Calculates its own hash digest.
-    ///
-    /// Args:
-    ///
-    /// `data` - the data of the block
-    /// `previous` - the digest of the previous block (empty if genesis)
-    ///
-    /// Returns:
-    ///
-    /// new block
-    fn new(
-        data: i32,
-        previous: String,
-    ) -> Block {
-
-        let content = HashContent::new(data);
-        let bytes = bincode::serialize(&content).unwrap();
-        let digest = sha1::Sha1::from(bytes).hexdigest();
-
-        Block {
-            content: content,
-            previous: previous,
-            current: digest,
-        }
-    }
-
-    /// Getter of the current block hash digest.
-    ///
-    /// Returns:
-    ///
-    /// current block digest as string
-    fn get_current(&self) -> &str {
-        &self.current
-    }
-
-    /// Getter of the hashed content.
-    ///
-    /// Returns:
-    ///
-    /// block hashed content
-    fn get_content(&self) -> &HashContent {
-        &self.content
-    }
-}
+use block::Block;
 
 /// Handles user input and returns that input as a string.
 ///
