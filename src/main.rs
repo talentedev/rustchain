@@ -14,7 +14,10 @@ use std::io::{
 use std::net::{
     TcpListener,
     TcpStream,
+    SocketAddr,
 };
+use std::time::Duration;
+use std::str::FromStr;
 use bincode::{
     serialize,
     deserialize,
@@ -29,6 +32,8 @@ mod hash_content;
 mod block;
 
 use block::Block;
+
+const DEFAULT_STATUS: &str = "Waiting. Type 'help' to get the commands list.";
 
 /// Handles user input and returns that input as a string.
 ///
@@ -46,33 +51,10 @@ fn get_input(height: u16) -> String {
     let mut input = String::new();
     stdin().read_line(&mut input).expect("cannot read input");
 
-    clear_screen(height);
+    clear_screen();
     println!("{}", Goto(0, 2));
 
     input.trim().to_string()
-}
-
-/// Returns an address:port string from the user input. Refactored as used multiple times.
-///
-/// Args:
-///
-/// `height` - the terminal height
-///
-/// Returns:
-///
-/// bind address in "address:port" format
-fn get_bind_address_from_input(height: u16) -> String {
-
-    let input = get_input(height);
-    let address = input.trim();
-
-    const PORT: &str = "10000";
-
-    format!(
-        "{}:{}",
-        address,
-        PORT,
-    ).to_string()
 }
 
 /// Display text into a blue bar with a width that is as long as the terminal width. Refactored as it is used multiple times.
@@ -80,8 +62,10 @@ fn get_bind_address_from_input(height: u16) -> String {
 /// Args:
 ///
 /// `text` - the text to display into the text bar
-fn display_text_bar(text: &str) {
+/// `height` - the height of the terminal screen
+fn display_text_bar(text: &str, height: u16) {
 
+    println!("{}", Goto(0, height - 2));
     println!(
         "{}{}{}{}{}{}",
         color::Bg(color::Blue),
@@ -93,23 +77,28 @@ fn display_text_bar(text: &str) {
         color::Bg(color::Reset),
         color::Fg(color::Reset),
     );
+    println!("{}", Goto(0, 2));
 }
 
 /// Clear the whole terminal content and generate the default content (bars and titles). Refactored as used multiple times and definition might not be clear.
-///
-/// Args:
-///
-/// `height` - the terminal height
-fn clear_screen(height: u16) {
+fn clear_screen() {
 
     /* send a control character to the terminal */
     print!("{}[2J", 27 as char);
 
     println!("{}", Goto(1, 1));
-    display_text_bar("rust-blockchain");
-
-    println!("{}", Goto(0, height - 1));
-    display_text_bar("Waiting. Type 'help' to get the commands list.");
+    const TITLE: &str = "rust-blockchain";
+    println!(
+        "{}{}{}{}{}{}",
+        color::Bg(color::Blue),
+        color::Fg(color::White),
+        TITLE,
+        std::iter::repeat(' ')
+            .take(terminal_size().unwrap().0 as usize - TITLE.len())
+            .collect::<String>(),
+        color::Bg(color::Reset),
+        color::Fg(color::Reset),
+    );
 }
 
 fn main() {
@@ -117,30 +106,50 @@ fn main() {
     let (_, height) = terminal_size().unwrap();
     let height = height as u16;
 
-    clear_screen(height);
+    clear_screen();
 
-    let genesis = Block::new(0, String::new());
-    let mut chain: Vec<Block> = vec![genesis];
-
-    println!("{}", Goto(0, 2));
-    println!("Genesis block has been generated.");
+    let mut chain: Vec<Block> = Vec::new();
+    let mut peers: Vec<SocketAddr> = Vec::new();
 
     loop {
 
+        display_text_bar(DEFAULT_STATUS, height);
+
         let input = get_input(height);
+        let splitted: Vec<&str> = input.split(' ').collect();
+
+        let command = match splitted.get(0) {
+            Some(value) => value.trim(),
+            None => { continue; }
+        };
 
         const ADD_BLOCK_CHOICE: &str = "add_block";
         const SEND_BLOCKCHAIN_CHOICE: &str = "send";
         const RECEIVE_BLOCKCHAIN_CHOICE: &str = "receive";
         const SEE_BLOCKCHAIN_CHOICE: &str = "list";
+        const ADD_PEER_CHOICE: &str = "add_peer";
         const HELP_CHOICE: &str = "help";
 
-        if input == ADD_BLOCK_CHOICE {
+        const PORT: &str = "10000";
 
-            println!("Data of the block:");
+        if command == ADD_BLOCK_CHOICE {
 
-            let input = get_input(height);
-            let data: i32 = input.trim().parse().unwrap();
+            let data: i32 = match splitted.get(1) {
+                Some(value) => value.trim().parse().unwrap(),
+                None => { continue; }
+            };
+
+            if chain.is_empty() {
+
+                let genesis = Block::new(data, String::new());
+
+                println!("Genesis block has been generated.");
+                println!("Current block digest: {}", genesis.get_current());
+
+                chain.push(genesis);
+
+                continue;
+            }
 
             let current_digest = chain.last()
                 .unwrap()
@@ -154,17 +163,44 @@ fn main() {
 
             chain.push(block);
         }
-        else if input == SEND_BLOCKCHAIN_CHOICE {
+        else if command == SEND_BLOCKCHAIN_CHOICE {
 
-            println!("Send blockchain to node at IP:");
+            let address = match splitted.get(1) {
+                Some(value) => value.trim(),
+                None => { continue; }
+            };
 
-            let bind_address = get_bind_address_from_input(height);
-            let mut stream = TcpStream::connect(bind_address).unwrap();
+            let full_address = format!("{}:{}", address, PORT);
+            let bind_address = match SocketAddr::from_str(&full_address) {
+                Ok(address) => address,
+                Err(_) => {
+                    println!("Incorrect address format.");
+                    continue;
+                }
+            };
+
+            display_text_bar(&format!("Trying to connect to {}...", address), height);
+
+            let mut stream = match TcpStream::connect_timeout(
+                &bind_address,
+                Duration::from_secs(5),
+            ) {
+                Ok(stream) => stream,
+                Err(_) => {
+                    println!("Cannot connect to the given node.");
+                    continue;
+                }
+            };
+
+            /* halt the program if serialization fails or socket write fails;
+               this is not something the user can solve, and something is clearly wrong... */
 
             let bytes = serialize(&chain).unwrap();
             stream.write(&bytes).unwrap();
         }
-        else if input == RECEIVE_BLOCKCHAIN_CHOICE {
+        else if command == RECEIVE_BLOCKCHAIN_CHOICE {
+
+            /* TODO: #33 not refactored by now, this should be handled by a separated thread */
 
             let listener = TcpListener::bind("0.0.0.0:10000").unwrap();
 
@@ -186,7 +222,7 @@ fn main() {
                 chain = received_chain;
             }
         }
-        else if input == SEE_BLOCKCHAIN_CHOICE {
+        else if command == SEE_BLOCKCHAIN_CHOICE {
 
             for block in chain.iter() {
 
@@ -196,14 +232,37 @@ fn main() {
                 println!("Data: {} \n\n", content.get_data());
             }
         }
-        else if input == HELP_CHOICE {
+        else if command == ADD_PEER_CHOICE {
+
+            let address = match splitted.get(1) {
+                Some(value) => value.trim(),
+                None => { continue; }
+            };
+
+            let full_address = format!("{}:{}", address, PORT);
+
+            match SocketAddr::from_str(&full_address) {
+                Ok(socket_address) => {
+                    peers.push(socket_address);
+                    println!("Address {} added to peers list.", address);
+                },
+                Err(_) => {
+                    println!("Incorrect address format.");
+                }
+            };
+        }
+        else if command == HELP_CHOICE {
 
             /* TODO: should use command options */
 
-            println!("add_block - append a block into the local blockchain");
-            println!("send - send a copy of the blockchain to another node");
-            println!("receive - receive a copy of the blockchain from another node");
-            println!("list - list the local chain blocks");
+            println!("add_block [data] - append a block into the local blockchain");
+            println!("Example: add_block 10 \n");
+            println!("send [ip] - send a copy of the blockchain to another node");
+            println!("Example: send 172.17.0.10\n");
+            println!("receive - receive a copy of the blockchain from another node\n");
+            println!("list - list the local chain blocks\n");
+            println!("add_peer - add one node as a peer");
+            println!("Example: add_peer 172.17.0.10");
         }
     }
 }
