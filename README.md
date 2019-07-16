@@ -10,10 +10,13 @@ A very simple blockchain in Rust.
 
  * [Dependencies](#dependencies)
  * [Block structure](#block-structure)
- * [Usage](#usage)
+ * [Start nodes](#start-nodes)
     - [Create many nodes](#create-many-nodes)
     - [Start a node](#start-a-node)
     - [Check node IP address](#check-node-ip-address)
+ * [Find peers](#find-peers)
+    - [Manually add a peer](#manually-add-a-peer)
+    - [List peers](#list-peers)
 
 ## Dependencies
 
@@ -21,6 +24,7 @@ A very simple blockchain in Rust.
  * `sha1`: sha1 hashing routines, in order to hash the previous block of the current created one,
  * `bincode`: serialization routines, used to serialize a block into raw binary (used for hashing),
  * `serde/serde_derive`: serialization/deserialization routines, in order to make a block "serializable"
+ * `termion`: provides terminal graphical routines
 
 ## Block structure
 
@@ -41,7 +45,7 @@ The `Block` structure implements the `Serialize` trait. In order to keep everyth
 and in order to prevent custom serialization functions, the block structure only contains
 primitive types (`i64`, `i32` and `String`) as they all already implement the trait.
 
-## Usage
+## Start nodes
 
 This section explains how to use the blockchain.
 
@@ -89,4 +93,23 @@ This is also possible to set the IP address of a node into the Vagrantfile:
 
 ```ruby
 config.vm.network "private_network", ip: "10.10.10.10"
+```
+
+## Find peers
+
+This section is about communication between nodes.
+
+### Manually add a peer
+
+The easiest way to link nodes together is to manually register a peer locally.
+Simply add a peer with `add_peer`.
+
+```sh
+add_peer 172.0.0.10
+```
+
+### List peers
+
+```sh
+list_peers
 ```

@@ -18,6 +18,7 @@ use std::net::{
 };
 use std::time::Duration;
 use std::str::FromStr;
+use std::thread::spawn;
 use bincode::{
     serialize,
     deserialize,
@@ -30,8 +31,21 @@ use termion::cursor::Goto;
 
 mod hash_content;
 mod block;
+mod blocks;
+mod peers;
 
 use block::Block;
+
+use blocks::{
+    add_genesis_block,
+    add_block,
+    list_blocks,
+};
+
+use peers::{
+    create_peer,
+    list_peers,
+};
 
 const DEFAULT_STATUS: &str = "Waiting. Type 'help' to get the commands list.";
 
@@ -57,15 +71,13 @@ fn get_input(height: u16) -> String {
     input.trim().to_string()
 }
 
-/// Display text into a blue bar with a width that is as long as the terminal width. Refactored as it is used multiple times.
+/// Display the given text into an horizontal bar.
 ///
 /// Args:
 ///
 /// `text` - the text to display into the text bar
-/// `height` - the height of the terminal screen
-fn display_text_bar(text: &str, height: u16) {
+fn display_text_bar(text: &str) {
 
-    println!("{}", Goto(0, height - 2));
     println!(
         "{}{}{}{}{}{}",
         color::Bg(color::Blue),
@@ -77,6 +89,18 @@ fn display_text_bar(text: &str, height: u16) {
         color::Bg(color::Reset),
         color::Fg(color::Reset),
     );
+}
+
+/// Update the content of the status text bar.
+///
+/// Args:
+///
+/// `text` - the text to display into the text bar
+/// `height` - the height of the terminal screen
+fn set_status_text(text: &str, height: u16) {
+
+    println!("{}", Goto(0, height - 2));
+    display_text_bar(text);
     println!("{}", Goto(0, 2));
 }
 
@@ -88,17 +112,21 @@ fn clear_screen() {
 
     println!("{}", Goto(1, 1));
     const TITLE: &str = "rust-blockchain";
-    println!(
-        "{}{}{}{}{}{}",
-        color::Bg(color::Blue),
-        color::Fg(color::White),
-        TITLE,
-        std::iter::repeat(' ')
-            .take(terminal_size().unwrap().0 as usize - TITLE.len())
-            .collect::<String>(),
-        color::Bg(color::Reset),
-        color::Fg(color::Reset),
-    );
+    display_text_bar(TITLE);
+}
+
+/// Handle incoming TCP connections with other nodes.
+fn handle_incoming_connections() {
+
+    let listener = TcpListener::bind("0.0.0.0:10000").unwrap();
+
+    for income in listener.incoming() {
+
+        /* TODO: display message when receive a connection;
+           should use mutex as it must modify the content
+           of the main text area (so the cursor position
+           must not be modified) */
+    }
 }
 
 fn main() {
@@ -111,66 +139,61 @@ fn main() {
     let mut chain: Vec<Block> = Vec::new();
     let mut peers: Vec<SocketAddr> = Vec::new();
 
+    spawn(|| { handle_incoming_connections() });
+
     loop {
 
-        display_text_bar(DEFAULT_STATUS, height);
+        set_status_text(DEFAULT_STATUS, height);
 
         let input = get_input(height);
         let splitted: Vec<&str> = input.split(' ').collect();
 
-        let command = match splitted.get(0) {
-            Some(value) => value.trim(),
+        /* get() returns &&str, so we mention result type &str
+           and get it from a reference (*) */
+        let command: &str = match splitted.get(0) {
+            Some(value) => *value,
             None => { continue; }
         };
 
-        const ADD_BLOCK_CHOICE: &str = "add_block";
-        const SEND_BLOCKCHAIN_CHOICE: &str = "send";
-        const RECEIVE_BLOCKCHAIN_CHOICE: &str = "receive";
-        const SEE_BLOCKCHAIN_CHOICE: &str = "list";
-        const ADD_PEER_CHOICE: &str = "add_peer";
-        const HELP_CHOICE: &str = "help";
+        const ADD_BLOCK: &str = "add_block";
+        const SEND_BLOCKCHAIN: &str = "send";
+        const RECEIVE_BLOCKCHAIN: &str = "receive";
+        const SEE_BLOCKCHAIN: &str = "list";
+        const ADD_PEER: &str = "add_peer";
+        const LIST_PEERS: &str = "list_peers";
+        const HELP: &str = "help";
 
-        const PORT: &str = "10000";
+        let option = match splitted.get(1) {
+            Some(option) => option,
+            None => {
 
-        if command == ADD_BLOCK_CHOICE {
+                if command == ADD_BLOCK ||
+                    command == SEND_BLOCKCHAIN ||
+                    command == ADD_PEER {
+                    continue;
+                }
 
-            let data: i32 = match splitted.get(1) {
-                Some(value) => value.trim().parse().unwrap(),
-                None => { continue; }
-            };
+                ""
+            }
+        };
+
+        if command == ADD_BLOCK {
+
+            let data: i32 = option.parse().unwrap();
+            let chain = &mut chain;
 
             if chain.is_empty() {
-
-                let genesis = Block::new(data, String::new());
-
-                println!("Genesis block has been generated.");
-                println!("Current block digest: {}", genesis.get_current());
-
-                chain.push(genesis);
-
+                add_genesis_block(chain, data);
                 continue;
             }
 
-            let current_digest = chain.last()
-                .unwrap()
-                .get_current()
-                .to_string();
-
-            let block = Block::new(data, current_digest.clone());
-
-            println!("One block has been added to the ledger.");
-            println!("Current block digest: {}", block.get_current());
-
-            chain.push(block);
+            add_block(chain, data);
         }
-        else if command == SEND_BLOCKCHAIN_CHOICE {
+        else if command == SEND_BLOCKCHAIN {
 
-            let address = match splitted.get(1) {
-                Some(value) => value.trim(),
-                None => { continue; }
-            };
+            /* TODO: should be done automatically when add a new block */
 
-            let full_address = format!("{}:{}", address, PORT);
+            let full_address = format!("{}:10000", option);
             let bind_address = match SocketAddr::from_str(&full_address) {
                 Ok(address) => address,
                 Err(_) => {
@@ -179,7 +202,7 @@ fn main() {
                 }
             };
 
-            display_text_bar(&format!("Trying to connect to {}...", address), height);
+            set_status_text(&format!("Trying to connect to {}...", option), height);
 
             let mut stream = match TcpStream::connect_timeout(
                 &bind_address,
@@ -198,7 +221,7 @@ fn main() {
             let bytes = serialize(&chain).unwrap();
             stream.write(&bytes).unwrap();
         }
-        else if command == RECEIVE_BLOCKCHAIN_CHOICE {
+        else if command == RECEIVE_BLOCKCHAIN {
 
             /* TODO: #33 not refactored by now, this should be handled by a separated thread */
 
@@ -222,36 +245,16 @@ fn main() {
                 chain = received_chain;
             }
         }
-        else if command == SEE_BLOCKCHAIN_CHOICE {
-
-            for block in chain.iter() {
-
-                let content = block.get_content();
-                println!("Hash: {}", block.get_current());
-                println!("Timestamp: {}", content.get_timestamp());
-                println!("Data: {} \n\n", content.get_data());
-            }
+        else if command == SEE_BLOCKCHAIN {
+            list_blocks(&chain);
         }
-        else if command == ADD_PEER_CHOICE {
-
-            let address = match splitted.get(1) {
-                Some(value) => value.trim(),
-                None => { continue; }
-            };
-
-            let full_address = format!("{}:{}", address, PORT);
-
-            match SocketAddr::from_str(&full_address) {
-                Ok(socket_address) => {
-                    peers.push(socket_address);
-                    println!("Address {} added to peers list.", address);
-                },
-                Err(_) => {
-                    println!("Incorrect address format.");
-                }
-            };
+        else if command == ADD_PEER {
+            create_peer(&mut peers, option);
         }
-        else if command == HELP_CHOICE {
+        else if command == LIST_PEERS {
+            list_peers(&peers);
+        }
+        else if command == HELP {
 
             /* TODO: should use command options */
 
