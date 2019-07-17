@@ -33,9 +33,8 @@ use bincode::{
 use block::Block;
 
 use blocks::{
-    add_genesis_block,
-    add_block,
     list_blocks,
+    broadcast_block,
 };
 
 use peers::{
@@ -116,12 +115,22 @@ fn main() {
             let data: i32 = option.parse().unwrap();
             let chain = &mut chain;
 
-            if chain.is_empty() {
-                add_genesis_block(chain, data);
-                continue;
+            let mut previous_digest = String::new();
+
+            if !chain.is_empty() {
+
+                previous_digest = chain.last()
+                    .unwrap()
+                    .get_current()
+                    .to_string();
             }
 
-            add_block(chain, data);
+            let block = Block::new(data, previous_digest);
+            chain.push(block.clone());
+
+            println!("New block added.");
+
+            broadcast_block(&peers, block);
         }
         else if command == SEND_BLOCKCHAIN {
 
