@@ -6,19 +6,23 @@ use std::net::{
 };
 use std::time::Duration;
 use std::io::Write;
+use std::sync::{
+    Arc,
+    Mutex,
+};
 
 use bincode::serialize;
 
 use block::Block;
-
-use display::set_status_text;
 
 /// Displays the blockchain blocks.
 ///
 /// Args:
 ///
 /// `chain` - the chain to modify
-pub fn list_blocks(chain: &Vec<Block>) {
+pub fn list_blocks(chain: &Arc<Mutex<Vec<Block>>>) {
+
+    let chain = chain.lock().unwrap();
 
     for block in chain.iter() {
 
@@ -48,7 +52,7 @@ pub fn broadcast_block(peers: &Vec<SocketAddr>, block: Block) {
         let address_part: Vec<&str> = address.split(':').collect();
         let address = address_part.get(0).unwrap();
 
-        set_status_text(&format!("Connecting to {}...", address));
+        println!("Connecting to {}...", address);
 
         let mut stream = match TcpStream::connect_timeout(
             &peer,
@@ -62,5 +66,9 @@ pub fn broadcast_block(peers: &Vec<SocketAddr>, block: Block) {
         };
 
         stream.write(&bytes).unwrap();
+
+        println!("Block sent to {}.", address);
     }
+
+    println!("Block creation broadcast terminated.");
 }

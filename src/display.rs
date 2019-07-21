@@ -6,10 +6,9 @@ use std::io::stdin;
 use termion::{
     color,
     terminal_size,
+    clear,
 };
 use termion::cursor::Goto;
-
-pub const DEFAULT_STATUS: &str = "Waiting. Type 'help' to get the commands list.";
 
 /// Display the given text into an horizontal bar. Refactored here as it is used when the screen is reset but also when the status bar content is updated.
 ///
@@ -31,27 +30,19 @@ pub fn display_text_bar(text: &str) {
     );
 }
 
-/// Update the content of the status text bar.
-///
-/// Args:
-///
-/// `text` - the text to display into the text bar
-pub fn set_status_text(text: &str) {
-
-    println!("{}", Goto(0, get_terminal_height() - 2));
-    display_text_bar(text);
-    println!("{}", Goto(0, 2));
-}
-
 /// Clear the whole terminal content and generate the default content (bars and titles). Refactored as used multiple times.
 pub fn clear_screen() {
 
-    /* send a control character to the terminal */
-    print!("{}[2J", 27 as char);
+    println!("{}", clear::All);
 
     println!("{}", Goto(1, 1));
     const TITLE: &str = "rust-blockchain";
     display_text_bar(TITLE);
+
+    println!("{}", Goto(0, get_terminal_height() - 3));
+    display_text_bar("");
+
+    println!("{}", Goto(0, 2));
 }
 
 /// Handles user input and returns that input as a string.
@@ -61,13 +52,14 @@ pub fn clear_screen() {
 /// user input as string
 pub fn get_input() -> String {
 
-    println!("{}", Goto(0, get_terminal_height() - 3));
+    set_cursor_into_input();
 
     let mut input = String::new();
     stdin().read_line(&mut input).expect("cannot read input");
 
     clear_screen();
-    println!("{}", Goto(0, 2));
+
+    set_cursor_into_logs();
 
     input.trim().to_string()
 }
@@ -81,4 +73,14 @@ fn get_terminal_height() -> u16 {
 
     let (_, height) = terminal_size().unwrap();
     height as u16
+}
+
+/// Set the cursor position at the logs area.
+pub fn set_cursor_into_logs() {
+    println!("{}", Goto(0, 2));
+}
+
+/// Set the cursor position at the input area.
+pub fn set_cursor_into_input() {
+    println!("{}", Goto(0, get_terminal_height() - 2));
 }
