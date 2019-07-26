@@ -32,6 +32,8 @@ use block::Block;
 use blocks::{
     list_blocks,
     broadcast_block,
+    add_block_from_message,
+    send_last_block_to_stream,
 };
 
 use peers::{
@@ -70,35 +72,30 @@ fn handle_incoming_connections(chain: Arc<Mutex<Vec<Block>>>) {
            of the main text area (so the cursor position
            must not be modified) */
 
+        clear_screen();
         set_cursor_into_logs();
 
         let mut stream = income.unwrap();
-        let mut buffer: Vec<u8> = Vec::new();
+
+        const MESSAGE_MAX_LENGTH: usize = 20;
+        let mut buffer: Vec<u8> = vec![0; MESSAGE_MAX_LENGTH];
 
         /* blocks until data is received  */
-        stream.read_to_end(&mut buffer).unwrap();
+        stream.read(&mut buffer).expect("Received message is too long.");
 
         let message: Message = deserialize(&buffer).unwrap();
         let label = message.get_label();
 
-        let address = stream.peer_addr().unwrap();
-
         if label == &MessageLabel::AskLastBlock {
-
-            println!("Last block requested by {}.", address);
-
-            /* TODO: send the last block */
+            send_last_block_to_stream(
+                stream,
+                &chain,
+            );
         }
         else if label == &MessageLabel::SendBlock {
-
-            let block = message.get_blocks().first().unwrap();
-
-            let mut chain = chain.lock().unwrap();
-            chain.push((*block).clone());
-
-            println!(
-                "Block from {} has been added to the chain.",
-                address,
+            add_block_from_message(
+                &chain,
+                &message,
             );
         }
 
