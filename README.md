@@ -1,6 +1,6 @@
 # rust-blockchain
 
-A very simple blockchain in Rust.
+Simple blockchain in Rust.
 
 ## In progress
 
@@ -47,6 +47,11 @@ the `data` are hashed into `previous` and `current`.
 The `Block` structure implements the `Serialize` trait. In order to keep everything simple,
 and in order to prevent custom serialization functions, the block structure only contains
 primitive types (`i64`, `i32` and `String`) as they all already implement the trait.
+
+Every block of the chain contains the hash of the previous block.
+This is exactly how "blockchain" maintains integrity
+(for instance, changing a block data from the middle of the chain
+would require to change all the blocks that come after).
 
 ## Start nodes
 

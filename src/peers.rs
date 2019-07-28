@@ -21,54 +21,65 @@ use message::{
     MessageLabel,
 };
 
-/// Creates a new peer.
+use block::Block;
+
+/// Check the given address and returns a stream to communicate with the specified node. Handles errors with output messages.
 ///
 /// Args:
 ///
-/// `peers` - the peers array to modify
-/// `address` - the new ip address (text format) to add
-pub fn create_peer(peers: &mut Vec<SocketAddr>, address: &str) {
-
-    const PORT: &str = "10000";
-    let full_address = format!("{}:{}", address, PORT);
-
-    let socket_address = match SocketAddr::from_str(&full_address) {
-        Ok(socket_address) => socket_address,
-        Err(_) => {
-            println!("Incorrect address format.");
-            return;
-        }
-    };
-
-    peers.push(socket_address.clone());
-
-    println!("Address {} added to peers list.", address);
+/// `address` - the node address in format IP:PORT
+///
+/// Returns:
+///
+/// the created TCP stream
+pub fn create_stream(address: &str) -> Option<TcpStream> {
 
     println!("Connecting to {}...", address);
 
-    let mut stream = match TcpStream::connect_timeout(
+    let socket_address = match SocketAddr::from_str(&address) {
+        Ok(socket_address) => socket_address,
+        Err(_) => {
+            println!("Incorrect address format.");
+            return None;
+        }
+    };
+
+    let stream = match TcpStream::connect_timeout(
         &socket_address,
         Duration::from_secs(5),
     ) {
         Ok(stream) => stream,
         Err(_) => {
-            println!("The peer {} has been added but cannot be joined right now.", address);
-            return;
+            println!("The peer cannot be joined.");
+            return None;
         }
     };
 
     println!("Connected to {}.", address);
 
+    Some(stream)
+}
+
+/// Creates a new peer.
+///
+/// Args:
+///
+/// `stream` - the stream opened to the added peer
+///
+/// Returns:
+///
+/// the received remote chain
+pub fn get_chain_from_stream(mut stream: TcpStream) -> Vec<Block> {
+
     let message = Message::new(
         Vec::new(),
-        MessageLabel::AskLastBlock,
+        MessageLabel::AskForAllBlocks,
     );
 
     let bytes = serialize(&message).unwrap();
 
     stream.write(&bytes).unwrap();
 
-    println!("Last block asked to {}.", address);
     println!("Waiting for reply...");
 
     /* TODO: explain why a message maximum size is 80 bytes long */
@@ -78,16 +89,7 @@ pub fn create_peer(peers: &mut Vec<SocketAddr>, address: &str) {
     stream.read(&mut buffer).expect("Received message is too long.");
 
     let message: Message = deserialize(&buffer).unwrap();
-
-    if message.get_blocks().is_empty() {
-        println!("No block returned.");
-        return;
-    }
-
-    println!("One block has been received.");
-
-    /* TODO: compare blocks in order to know
-       if the local one is the same as the received one */
+    message.get_blocks().clone()
 }
 
 /// Displays all the peers.
@@ -95,9 +97,9 @@ pub fn create_peer(peers: &mut Vec<SocketAddr>, address: &str) {
 /// Args:
 ///
 /// `peers` - the list of peers to display
-pub fn list_peers(peers: &Vec<SocketAddr>) {
+pub fn list_peers(peers: &Vec<String>) {
 
     for peer in peers.iter() {
-        println!("{}", peer.to_string());
+        println!("{}", peer);
     }
 }
